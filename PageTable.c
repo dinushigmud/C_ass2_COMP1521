@@ -73,7 +73,7 @@ void initPageTable(int policy, int np)
 
 int requestPage(int pno, char mode, int time)
 {
-   if (pno < 0 || pno >= nPages-1) {
+   if (pno < 0 || pno >= nPages) {
       fprintf(stderr,"Invalid page reference\n");
       exit(EXIT_FAILURE);
    }
@@ -102,7 +102,7 @@ int requestPage(int pno, char mode, int time)
          // - not accessed, not loaded
          PTE *p = &PageTable[pno];
          
-         p->status =  ON_DISK;
+         p->status =  IN_MEMORY;
          p->modified = 0;
          p->frame = fno;
          p->loadTime= time;
@@ -118,7 +118,7 @@ int requestPage(int pno, char mode, int time)
       // - just loaded
       PTE *p = &PageTable[pno];      
 
-      p->status =  ON_DISK;
+      p->status =  IN_MEMORY;
       p->modified = 0;
       p->frame = fno;
       p->loadTime= time;
@@ -146,37 +146,36 @@ int requestPage(int pno, char mode, int time)
 
 static int findVictim(int time)
 {
-   int victim = 0;
-   int vno = 0;
+   int victim = NONE;
    switch (replacePolicy) {
 
    case REPL_LRU:
       // TODO: implement LRU strategy
-      vno = 0;
+      victim = NONE;
       int temp_time = time;
       for (int i = 0; i < nPages; i++) {
          PTE *p = &PageTable[i];         
          if(p->accessTime < temp_time ){
             temp_time = p->accessTime;
-            vno = i;
+            victim = i;
          }
       }
-      victim = vno;
+
       //break;
 
 
    case REPL_FIFO:
       // TODO: implement FIFO strategy 
-      vno = 0;      
+      victim = NONE;
       temp_time = time;
       for (int i = 0; i < nPages; i++) {
          PTE *p = &PageTable[i];         
          if(p->loadTime < temp_time ){
             temp_time = p->loadTime;
-            vno = i;
+            victim = i;
          }
       }
-      victim = vno;
+
       //break;
    
    case REPL_CLOCK:
