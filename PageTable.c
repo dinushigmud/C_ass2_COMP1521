@@ -73,7 +73,7 @@ void initPageTable(int policy, int np)
 
 int requestPage(int pno, char mode, int time)
 {
-   if (pno < 0 || pno >= nPages) {
+   if (pno < 0 || pno >= nPages-1) {
       fprintf(stderr,"Invalid page reference\n");
       exit(EXIT_FAILURE);
    }
@@ -91,21 +91,34 @@ int requestPage(int pno, char mode, int time)
 #endif
          // TODO:
          // if victim page modified, save its frame
+         saveFrame(vno);
          // collect frame# (fno) for victim page
+         fno = findFreeFrame();
+         loadFrame(fno,vno,time);
          // update PTE for victim page
          // - new status
          // - no longer modified
          // - no frame mapping
          // - not accessed, not loaded
+         PageTable[pno]->status =  ON_DISK;
+         PageTable[pno]->modified = 0;
+         PageTable[pno]->frame = fno;
+         PageTable[pno]->loadTime= time;
       }
       printf("Page %d given frame %d\n",pno,fno);
       // TODO:
       // load page pno into frame fno
+      loadFrame(fno,pno,time);
       // update PTE for page
       // - new status
       // - not yet modified
       // - associated with frame fno
       // - just loaded
+      PageTable[pno]->status =  ON_DISK;
+      PageTable[pno]->modified = 0;
+      PageTable[pno]->frame = fno;
+      PageTable[pno]->loadTime= time;
+
       break;
    case IN_MEMORY:
       // TODO: add stats collection
@@ -131,15 +144,42 @@ static int findVictim(int time)
 {
    int victim = 0;
    switch (replacePolicy) {
+
    case REPL_LRU:
       // TODO: implement LRU strategy
-      break;
+      vno = 0;
+      temp_time = time;
+      PTE *p = &PageTable[i];
+      for (int i = 0; i < nPages; i++) {
+         if(p->accessTime < temp_time ){
+            temp_time = p->accessTime;
+            vno = i;
+         }
+         i++;
+      }
+      victim = vno;
+      //break;
+
+
    case REPL_FIFO:
-      // TODO: implement FIFO strategy
-      break;
+      // TODO: implement FIFO strategy 
+      vno = 0;
+      temp_time = time;
+      PTE *p = &PageTable[i];
+      for (int i = 0; i < nPages; i++) {
+         if(p->loadTime < temp_time ){
+            temp_time = p->loadTime;
+            vno = i;
+         }
+         i++;
+      }
+      victim = vno;
+      //break;
+   
    case REPL_CLOCK:
-      return 0;
+       return 0;
    }
+
    return victim;
 }
 
