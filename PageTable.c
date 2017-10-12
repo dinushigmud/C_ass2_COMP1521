@@ -100,10 +100,12 @@ int requestPage(int pno, char mode, int time)
          // - no longer modified
          // - no frame mapping
          // - not accessed, not loaded
-         PageTable[pno]->status =  ON_DISK;
-         PageTable[pno]->modified = 0;
-         PageTable[pno]->frame = fno;
-         PageTable[pno]->loadTime= time;
+         PTE *p = &PageTable[pno];
+         
+         p->status =  ON_DISK;
+         p->modified = 0;
+         p->frame = fno;
+         p->loadTime= time;
       }
       printf("Page %d given frame %d\n",pno,fno);
       // TODO:
@@ -114,10 +116,12 @@ int requestPage(int pno, char mode, int time)
       // - not yet modified
       // - associated with frame fno
       // - just loaded
-      PageTable[pno]->status =  ON_DISK;
-      PageTable[pno]->modified = 0;
-      PageTable[pno]->frame = fno;
-      PageTable[pno]->loadTime= time;
+      PTE *p = &PageTable[pno];      
+
+      p->status =  ON_DISK;
+      p->modified = 0;
+      p->frame = fno;
+      p->loadTime= time;
 
       break;
    case IN_MEMORY:
@@ -143,19 +147,19 @@ int requestPage(int pno, char mode, int time)
 static int findVictim(int time)
 {
    int victim = 0;
+   int vno = 0;
    switch (replacePolicy) {
 
    case REPL_LRU:
       // TODO: implement LRU strategy
       vno = 0;
-      temp_time = time;
-      PTE *p = &PageTable[i];
+      int temp_time = time;
       for (int i = 0; i < nPages; i++) {
+         PTE *p = &PageTable[i];         
          if(p->accessTime < temp_time ){
             temp_time = p->accessTime;
             vno = i;
          }
-         i++;
       }
       victim = vno;
       //break;
@@ -163,15 +167,14 @@ static int findVictim(int time)
 
    case REPL_FIFO:
       // TODO: implement FIFO strategy 
-      vno = 0;
+      vno = 0;      
       temp_time = time;
-      PTE *p = &PageTable[i];
       for (int i = 0; i < nPages; i++) {
+         PTE *p = &PageTable[i];         
          if(p->loadTime < temp_time ){
             temp_time = p->loadTime;
             vno = i;
          }
-         i++;
       }
       victim = vno;
       //break;
