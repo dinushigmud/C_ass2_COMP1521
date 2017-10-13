@@ -144,6 +144,7 @@ int requestPage(int pno, char mode, int time){
    case NOT_USED:
    case ON_DISK:
       // TODO: add stats collection
+      countPageFault();
       fno = findFreeFrame();
       if (fno == NONE) {
          int vno = findVictim(time);
@@ -167,6 +168,7 @@ int requestPage(int pno, char mode, int time){
          // - not accessed, not loaded
          updateVictimTable(vno,time);         
       }
+
       printf("Page %d given frame %d\n",pno,fno);
       // TODO:
       // load page pno into frame fno
@@ -180,6 +182,7 @@ int requestPage(int pno, char mode, int time){
 
       break;
    case IN_MEMORY:
+      countPageHit();
    default:
       fprintf(stderr,"Invalid page status\n");
       exit(EXIT_FAILURE);
