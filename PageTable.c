@@ -32,7 +32,7 @@ typedef struct {
 typedef struct Queue
 {
     int front;
-    int rear;
+    int last;
     int size;
     unsigned capacity;
     int* pages;
@@ -272,39 +272,38 @@ void showPageTableStatus(void)
  
 // function to create a queue of given capacity. 
 // It initializes size of queue as 0
-struct Queue* createQueue(unsigned capacity)
+Queue_Node createQueue(unsigned capacity)
 {
-    struct Queue* queue = (struct Queue*) malloc(sizeof(struct Queue));
+    Queue_Node queue = (Queue_Node) malloc(sizeof(struct Queue));
     queue->capacity = capacity;
     queue->front = queue->size = 0; 
-    queue->rear = capacity - 1; 
+    queue->last = capacity - 1; 
     queue->pages = (int*) malloc(queue->capacity * sizeof(int));
     return queue;
 }
  
 // Queue is full when size becomes equal to the capacity 
-int isFull(struct Queue* queue)
+int isFull(Queue_Node queue)
 {  return (queue->size == queue->capacity);  }
  
 // Queue is empty when size is 0
-int isEmpty(struct Queue* queue)
+int isEmpty(Queue_Node queue)
 {  return (queue->size == 0); }
  
 // Function to add an item to the queue.  
-// It changes rear and size
-void enqueue(struct Queue* queue, int item)
+// It changes last and size
+void enqueue(Queue_Node queue, int item)
 {
     if (isFull(queue))
         return;
-    queue->rear = (queue->rear + 1)%queue->capacity;
-    queue->pages[queue->rear] = item;
+    queue->last = (queue->last + 1)%queue->capacity;
+    queue->pages[queue->last] = item;
     queue->size = queue->size + 1;
-    printf("%d enqueued to queue\n", item);
 }
  
 // Function to remove an item from queue. 
 // It changes front and size
-int dequeue(struct Queue* queue)
+int dequeue(Queue_Node queue)
 {
     if (isEmpty(queue))
         return INT_MIN;
