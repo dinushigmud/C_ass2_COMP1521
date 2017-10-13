@@ -35,13 +35,13 @@ typedef struct Queue {
     int size;
     unsigned capacity;
     int* pages;
-}Queue_Node;
+} Queue_Node;
 
-typedef struct Node  {
+struct Node  {
 	int data;
-	Node next;
-	Node prev;
-} Node;
+	struct Node*  next;
+	struct Node*  prev;
+};
 
 
 
@@ -56,9 +56,9 @@ static int nFrames;
 static int  replacePolicy;  // how to do page replacement
 static int  fifoList;       // index of first PTE in FIFO list
 static int  fifoLast;       // index of last PTE in FIFO list
-static Queue_Node *lru_list;
-static Node head;
-static Node fifo_tail;
+static Queue_Node *fifo_list;
+static struct Node* head;
+static struct Node* tail;
 
 
 // Forward refs for private functions
@@ -68,7 +68,10 @@ struct Queue* createQueue(unsigned);
 int isFull(struct Queue*);
 int isEmpty(struct Queue*);
 int dequeue(struct Queue*);
-void enqueue(struct Queue*, int); 
+void enqueue(struct Queue*, int);
+void InsertAtHead(int);
+void deleteTail();
+void deleteItem(int);
 
 // initPageTable: create/initialise Page Table data structures
 
@@ -93,7 +96,6 @@ void initPageTable(int policy, int np)
       p->nPeeks = p->nPokes = 0;
    }
 
-   lru_list = createQueue(nPages*nFrames);
    fifo_list = createQueue (nPages*nFrames);
 }
 
@@ -150,13 +152,13 @@ int requestPage(int pno, char mode, int time){
 #endif
          // TODO:
          // if victim page modified, save its frame
-         PTE *p = &PageTable[vno];
-         if(p->modified){
-            saveFrame(p->frame);
+         PTE *v = &PageTable[vno];
+         if(v->modified){
+            saveFrame(v->frame);
          }
 
          // collect frame# (fno) for victim page
-         fno = p->frame;
+         fno = v->frame;
          saveFrame(fno);
          // update PTE for victim page
          // - new status
@@ -178,7 +180,6 @@ int requestPage(int pno, char mode, int time){
 
       break;
    case IN_MEMORY:
-   PTE *p = &PageTable[pno];    
    default:
       fprintf(stderr,"Invalid page status\n");
       exit(EXIT_FAILURE);
@@ -299,9 +300,9 @@ void showPageTableStatus(void)
  
 // function to create a queue of given capacity. 
 // It initializes size of queue as 0
-Queue_Node createQueue(unsigned capacity)
+struct Queue* createQueue(unsigned capacity)
 {
-    Queue_Node queue = (Queue_Node) malloc(sizeof(struct Queue));
+    struct Queue* queue = (struct Queue*) malloc(sizeof(struct Queue));
     queue->capacity = capacity;
     queue->front = queue->size = 0; 
     queue->last = capacity - 1; 
@@ -310,16 +311,16 @@ Queue_Node createQueue(unsigned capacity)
 }
  
 // Queue is full when size becomes equal to the capacity 
-int isFull(Queue_Node queue)
+int isFull(Queue_Node* queue)
 {  return (queue->size == queue->capacity);  }
  
 // Queue is empty when size is 0
-int isEmpty(Queue_Node queue)
+int isEmpty(Queue_Node* queue)
 {  return (queue->size == 0); }
  
 // Function to add an item to the queue.  
 // It changes last and size
-void enqueue(Queue_Node queue, int item)
+void enqueue(Queue_Node* queue, int item)
 {
     if (isFull(queue))
         return;
@@ -330,7 +331,7 @@ void enqueue(Queue_Node queue, int item)
  
 // Function to remove an item from queue. 
 // It changes front and size
-int dequeue(Queue_Node queue)
+int dequeue(Queue_Node* queue)
 {
     if (isEmpty(queue))
         return INT_MIN;
@@ -343,8 +344,8 @@ int dequeue(Queue_Node queue)
 //***************Doubly_______Linked______List _________Functions*********************************
 
 //Creates a new Node and returns pointer to it. 
-Node newNode(int item) {
-	Node newNode  = (Node)malloc(sizeof(struct Node));
+struct Node* newNode(int item) {
+	struct Node* newNode  = (struct Node* )malloc(sizeof(struct Node));
 	newNode->data = item;
 	newNode->prev = NULL;
 	newNode->next = NULL;
@@ -353,18 +354,19 @@ Node newNode(int item) {
 
 //Inserts a Node at head of doubly linked list
 void InsertAtHead(int item) {
-	Node newNode = newNode(item);
+	struct Node* new = newNode(item);
 	if(head == NULL) {
-		head = newNode;
+      head = new;
+      tail = new;
 		return;
 	}
-	head->prev = newNode;
-	newNode->next = head; 
-	head = newNode;
+	head->prev = new;
+	new->next = head; 
+	head = new;
 }
 
 void deleteTail(){
-    Node toDelete;
+    struct Node*  toDelete;
     if(tail == NULL){
        return;
     } else {
@@ -377,22 +379,22 @@ void deleteTail(){
 }
 
 void deleteItem(int item) { 
-   Node currP;
-   Node tmp;
-   for (currP = head; currP != NULL; currP = currP->next) {
-      if (currP->data == item) {  
-         if (currP->prev == NULL) { /* Remove from beginning */
-            head = currP->next;
-         } else if(currP->next == NULL) { /* Remove from end */
+   struct Node*  curr;
+   struct Node*  tmp;
+   for (curr = head; curr != NULL; curr = curr->next) {
+      if (curr->data == item) {  
+         if (curr->prev == NULL) { /* Remove from beginning */
+            head = curr->next;
+         } else if(curr->next == NULL) { /* Remove from end */
             deleteTail();
          } else { /* Remove from middle */
-            tmp = currP->prev;
-            tmp->next = currP->next;
+            tmp = curr->prev;
+            tmp->next = curr->next;
 
-            tmp = currP->next;
-            tmp->prev = currP->prev;
+            tmp = curr->next;
+            tmp->prev = curr->prev;
          }
-         free(currP) 
+         free(curr); 
       }
   }
 }
