@@ -29,14 +29,21 @@ typedef struct {
 } PTE;
 
 // A structure to represent a queue
-typedef struct Queue
-{
+typedef struct Queue {
     int front;
     int last;
     int size;
     unsigned capacity;
     int* pages;
 }Queue_Node;
+
+typedef struct Node  {
+	int data;
+	Node next;
+	Node prev;
+} Node;
+
+
 
 // The virtual address space of the process is managed
 //  by an array of Page Table Entries (PTEs)
@@ -50,7 +57,9 @@ static int  replacePolicy;  // how to do page replacement
 static int  fifoList;       // index of first PTE in FIFO list
 static int  fifoLast;       // index of last PTE in FIFO list
 static Queue_Node *lru_list;
-static Queue_Node *fifo_list;
+static Node head;
+static Node fifo_tail;
+
 
 // Forward refs for private functions
 
@@ -95,9 +104,14 @@ void updatePageTable(int pno, int fno, int time){
     p->modified = 0;
     p->frame = fno;
     p->loadTime= time;
+    p->accessTime = time;
 
     //when loaded into Memory, a new node is 'enqueued' to the Queue
     enqueue(fifo_list, pno);
+
+    //when loaded into Memory, a new node is inserted at the head of doubly linked list
+    InsertAtHead(pno);
+
 }
 
 void updateVictimTable(int vno, int time){
@@ -107,6 +121,9 @@ void updateVictimTable(int vno, int time){
     p->modified = 0;
     p->frame = NONE;
     p->loadTime = NONE;
+    p->accessTime = NONE;
+
+    deleteItem(vno);
 }
 
 // requestPage: request access to page pno in mode
@@ -114,8 +131,7 @@ void updateVictimTable(int vno, int time){
 // page may have to be loaded
 // PTE(status,modified,frame,accessTime,nextPage,nPeeks,nWrites)
 
-int requestPage(int pno, char mode, int time)
-{
+int requestPage(int pno, char mode, int time){
    if (pno < 0 || pno >= nPages) {
       fprintf(stderr,"Invalid page reference\n");
       exit(EXIT_FAILURE);
@@ -162,8 +178,7 @@ int requestPage(int pno, char mode, int time)
 
       break;
    case IN_MEMORY:
-      // TODO: add stats collection
-      break;
+   PTE *p = &PageTable[pno];    
    default:
       fprintf(stderr,"Invalid page status\n");
       exit(EXIT_FAILURE);
@@ -175,6 +190,9 @@ int requestPage(int pno, char mode, int time)
       p->modified = 1;
    }
    p->accessTime = time;
+   InsertAtHead(pno);
+   deleteItem(pno);
+   
    return p->frame;
 }
 
@@ -187,8 +205,8 @@ static int findVictim(int time)
    switch (replacePolicy) {
 
    case REPL_LRU:
-      // TODO: implement LRU strategy
-      victim = NONE;
+      //basic code
+      /*victim = NONE;
       int temp_time = time;
       for (int i = 0; i < nPages; i++) {
          PTE *p = &PageTable[i];
@@ -198,7 +216,16 @@ static int findVictim(int time)
                 victim = i;
             }
         }
-      }
+      }*/
+
+      //****************************************************************
+      //lru is implemented using a doubly linked list
+      //every accesstime the node assosciated with the page 
+      //is inserted at the head of list
+      //and the copy of the node in the previous position  is deleted
+      //thus victim is always the tail of the list
+      victim = tail->data;
+      deleteTail();
 
 
    case REPL_FIFO:
@@ -311,4 +338,61 @@ int dequeue(Queue_Node queue)
     queue->front = (queue->front + 1)%queue->capacity;
     queue->size = queue->size - 1;
     return item;
+}
+
+//***************Doubly_______Linked______List _________Functions*********************************
+
+//Creates a new Node and returns pointer to it. 
+Node newNode(int item) {
+	Node newNode  = (Node)malloc(sizeof(struct Node));
+	newNode->data = item;
+	newNode->prev = NULL;
+	newNode->next = NULL;
+	return newNode;
+}
+
+//Inserts a Node at head of doubly linked list
+void InsertAtHead(int item) {
+	Node newNode = newNode(item);
+	if(head == NULL) {
+		head = newNode;
+		return;
+	}
+	head->prev = newNode;
+	newNode->next = head; 
+	head = newNode;
+}
+
+void deleteTail(){
+    Node toDelete;
+    if(tail == NULL){
+       return;
+    } else {
+        toDelete = tail;
+
+        tail = tail->prev; // Move last pointer to 2nd last node
+        tail->next = NULL; // Remove link to of 2nd last node with last node
+        free(toDelete);       // Delete the last node
+    }
+}
+
+void deleteItem(int item) { 
+   Node currP;
+   Node tmp;
+   for (currP = head; currP != NULL; currP = currP->next) {
+      if (currP->data == item) {  
+         if (currP->prev == NULL) { /* Remove from beginning */
+            head = currP->next;
+         } else if(currP->next == NULL) { /* Remove from end */
+            deleteTail();
+         } else { /* Remove from middle */
+            tmp = currP->prev;
+            tmp->next = currP->next;
+
+            tmp = currP->next;
+            tmp->prev = currP->prev;
+         }
+         free(currP) 
+      }
+  }
 }
