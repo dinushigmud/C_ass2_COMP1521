@@ -2,6 +2,25 @@
 // COMP1521 17s2 Assignment 2
 // Written by John Shepherd, September 2017
 
+
+//*************************************************************************
+//my approach to LRU - 
+//       use a doubly linked list
+//       everytime a page is accessed --- that page is added to the head
+//       of the doubly linked list
+//       the page is deleted from where it used to be 
+//       the tail is constantly maintained as the oldest accessed page
+//       the victim page according to LRU will therefore be the tail of 
+//       the doubly linked list
+//*************************************************************************
+//my approach to FIFO - 
+//       as the name suggests I used a FIFO ADT
+//       namely, a Queue structure
+//       when loaded into frame, the page is enqueued to the queue
+//       when the FIFO is implemented the dequeueing process will
+//       subsequently remove the first added page
+//*************************************************************************
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <limits.h>
@@ -29,13 +48,13 @@ typedef struct {
 } PTE;
 
 // A structure to represent a queue
-typedef struct Queue {
+struct Queue {
     int front;
     int last;
     int size;
     unsigned capacity;
     int* pages;
-} Queue_Node;
+};
 
 struct Node  {
 	int data;
@@ -56,7 +75,7 @@ static int nFrames;
 static int  replacePolicy;  // how to do page replacement
 static int  fifoList;       // index of first PTE in FIFO list
 static int  fifoLast;       // index of last PTE in FIFO list
-static Queue_Node *fifo_list;
+static struct Queue* fifo_list;
 static struct Node* head;
 static struct Node* tail;
 
@@ -75,8 +94,7 @@ void deleteItem(int);
 
 // initPageTable: create/initialise Page Table data structures
 
-void initPageTable(int policy, int np)
-{
+void initPageTable(int policy, int np) {
    PageTable = malloc(np * sizeof(PTE));
    if (PageTable == NULL) {
       fprintf(stderr, "Can't initialise Memory\n");
@@ -112,7 +130,8 @@ void updatePageTable(int pno, int fno, int time){
     enqueue(fifo_list, pno);
 
     //when loaded into Memory, a new node is inserted at the head of doubly linked list
-    InsertAtHead(pno);
+   // deleteItem(pno);
+    //InsertAtHead(pno);
 
 }
 
@@ -160,7 +179,6 @@ int requestPage(int pno, char mode, int time){
 
          // collect frame# (fno) for victim page
          fno = v->frame;
-         saveFrame(fno);
          // update PTE for victim page
          // - new status
          // - no longer modified
@@ -170,7 +188,6 @@ int requestPage(int pno, char mode, int time){
       }
 
       printf("Page %d given frame %d\n",pno,fno);
-      // TODO:
       // load page pno into frame fno
       loadFrame(fno,pno,time);
       // update PTE for page
@@ -187,6 +204,7 @@ int requestPage(int pno, char mode, int time){
       fprintf(stderr,"Invalid page status\n");
       exit(EXIT_FAILURE);
    }
+   
    if (mode == 'r')
       p->nPeeks++;
    else if (mode == 'w') {
@@ -194,8 +212,8 @@ int requestPage(int pno, char mode, int time){
       p->modified = 1;
    }
    p->accessTime = time;
-   InsertAtHead(pno);
    deleteItem(pno);
+   InsertAtHead(pno);
    
    return p->frame;
 }
@@ -303,8 +321,7 @@ void showPageTableStatus(void)
  
 // function to create a queue of given capacity. 
 // It initializes size of queue as 0
-struct Queue* createQueue(unsigned capacity)
-{
+struct Queue* createQueue(unsigned capacity) {
     struct Queue* queue = (struct Queue*) malloc(sizeof(struct Queue));
     queue->capacity = capacity;
     queue->front = queue->size = 0; 
@@ -314,19 +331,19 @@ struct Queue* createQueue(unsigned capacity)
 }
  
 // Queue is full when size becomes equal to the capacity 
-int isFull(Queue_Node* queue)
-{  return (queue->size == queue->capacity);  }
+int isFull(struct Queue* queue) {
+   return (queue->size == queue->capacity);  
+}
  
 // Queue is empty when size is 0
-int isEmpty(Queue_Node* queue)
-{  return (queue->size == 0); }
+int isEmpty(struct Queue* queue){  
+   return (queue->size == 0); 
+}
  
 // Function to add an item to the queue.  
 // It changes last and size
-void enqueue(Queue_Node* queue, int item)
-{
-    if (isFull(queue))
-        return;
+void enqueue(struct Queue* queue, int item){
+    if (isFull(queue)) return;
     queue->last = (queue->last + 1)%queue->capacity;
     queue->pages[queue->last] = item;
     queue->size = queue->size + 1;
@@ -334,10 +351,8 @@ void enqueue(Queue_Node* queue, int item)
  
 // Function to remove an item from queue. 
 // It changes front and size
-int dequeue(Queue_Node* queue)
-{
-    if (isEmpty(queue))
-        return INT_MIN;
+int dequeue(struct Queue* queue) {
+    if (isEmpty(queue)) return INT_MIN;
     int item = queue->pages[queue->front];
     queue->front = (queue->front + 1)%queue->capacity;
     queue->size = queue->size - 1;

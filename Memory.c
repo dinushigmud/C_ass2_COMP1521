@@ -63,7 +63,6 @@ int findFreeFrame()
 }
 
 // loadFrame: load a frame with a particular page
-
 void loadFrame(int fno, int pno, int when)
 {
    Memory[fno].whichPage = pno;
