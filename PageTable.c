@@ -4,6 +4,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <limits.h>
 #include "Memory.h"
 #include "Stats.h"
 #include "PageTable.h"
@@ -27,6 +28,16 @@ typedef struct {
    // TODO: add more fields here, if needed ...
 } PTE;
 
+// A structure to represent a queue
+typedef struct Queue
+{
+    int front;
+    int rear;
+    int size;
+    unsigned capacity;
+    int* pages;
+}Queue_Node;
+
 // The virtual address space of the process is managed
 //  by an array of Page Table Entries (PTEs)
 // The Page Table is not directly accessible outside
@@ -34,13 +45,21 @@ typedef struct {
 
 static PTE *PageTable;      // array of page table entries
 static int  nPages;         // # entries in page table
+static int nFrames;
 static int  replacePolicy;  // how to do page replacement
 static int  fifoList;       // index of first PTE in FIFO list
 static int  fifoLast;       // index of last PTE in FIFO list
+static Queue_Node *lru_list;
+static Queue_Node *fifo_list;
 
 // Forward refs for private functions
 
 static int findVictim(int);
+struct Queue* createQueue(unsigned);
+int isFull(struct Queue*);
+int isEmpty(struct Queue*);
+int dequeue(struct Queue*);
+void enqueue(struct Queue*, int); 
 
 // initPageTable: create/initialise Page Table data structures
 
@@ -64,6 +83,30 @@ void initPageTable(int policy, int np)
       p->loadTime = NONE;
       p->nPeeks = p->nPokes = 0;
    }
+
+   lru_list = createQueue(nPages*nFrames);
+   fifo_list = createQueue (nPages*nFrames);
+}
+
+void updatePageTable(int pno, int fno, int time){
+    PTE *p = &PageTable[pno];
+    
+    p->status =  IN_MEMORY;
+    p->modified = 0;
+    p->frame = fno;
+    p->loadTime= time;
+
+    //when loaded into Memory, a new node is 'enqueued' to the Queue
+    enqueue(fifo_list, pno);
+}
+
+void updateVictimTable(int vno, int time){
+    PTE *p = &PageTable[vno];
+    
+    p->status =  ON_DISK;
+    p->modified = 0;
+    p->frame = NONE;
+    p->loadTime = NONE;
 }
 
 // requestPage: request access to page pno in mode
@@ -91,21 +134,20 @@ int requestPage(int pno, char mode, int time)
 #endif
          // TODO:
          // if victim page modified, save its frame
-         saveFrame(vno);
+         PTE *p = &PageTable[vno];
+         if(p->modified){
+            saveFrame(p->frame);
+         }
+
          // collect frame# (fno) for victim page
-         fno = findFreeFrame();
-         loadFrame(fno,vno,time);
+         fno = p->frame;
+         saveFrame(fno);
          // update PTE for victim page
          // - new status
          // - no longer modified
          // - no frame mapping
          // - not accessed, not loaded
-         PTE *p = &PageTable[pno];
-         
-         p->status =  IN_MEMORY;
-         p->modified = 0;
-         p->frame = fno;
-         p->loadTime= time;
+         updateVictimTable(vno,time);         
       }
       printf("Page %d given frame %d\n",pno,fno);
       // TODO:
@@ -116,12 +158,7 @@ int requestPage(int pno, char mode, int time)
       // - not yet modified
       // - associated with frame fno
       // - just loaded
-      PTE *p = &PageTable[pno];      
-
-      p->status =  IN_MEMORY;
-      p->modified = 0;
-      p->frame = fno;
-      p->loadTime= time;
+      updatePageTable(pno,fno,time);
 
       break;
    case IN_MEMORY:
@@ -154,34 +191,41 @@ static int findVictim(int time)
       victim = NONE;
       int temp_time = time;
       for (int i = 0; i < nPages; i++) {
-         PTE *p = &PageTable[i];         
-         if(p->accessTime < temp_time ){
-            temp_time = p->accessTime;
-            victim = i;
-         }
+         PTE *p = &PageTable[i];
+         if(p->accessTime != NONE){
+            if(p->accessTime < temp_time ){
+                temp_time = p->accessTime;
+                victim = i;
+            }
+        }
       }
-
-      //break;
 
 
    case REPL_FIFO:
-      // TODO: implement FIFO strategy 
-      victim = NONE;
+
+      //basic code
+      /*victim = NONE;
       temp_time = time;
       for (int i = 0; i < nPages; i++) {
-         PTE *p = &PageTable[i];         
-         if(p->loadTime < temp_time ){
-            temp_time = p->loadTime;
-            victim = i;
-         }
-      }
+         PTE *p = &PageTable[i]; 
+         if (p->loadTime != NONE){       
+            if(p->loadTime < temp_time ){
+                temp_time = p->loadTime;
+                victim = i;
+            }
+        }
+      }*/
+      
+      //*****************************************************************
+      //fifo-list maintains a queue based on loadTime
+      //the dequeue function gives the very first inserted node
+      //this is ultimately the first loaded pno
+      victim = dequeue(fifo_list);
 
-      //break;
    
    case REPL_CLOCK:
        return 0;
    }
-
    return victim;
 }
 
@@ -219,4 +263,53 @@ void showPageTableStatus(void)
       printf(" %7d", p->nPokes);
       printf("\n");
    }
+}
+
+
+
+
+//********************* Queue ______ Functions *******************************
+ 
+// function to create a queue of given capacity. 
+// It initializes size of queue as 0
+struct Queue* createQueue(unsigned capacity)
+{
+    struct Queue* queue = (struct Queue*) malloc(sizeof(struct Queue));
+    queue->capacity = capacity;
+    queue->front = queue->size = 0; 
+    queue->rear = capacity - 1; 
+    queue->pages = (int*) malloc(queue->capacity * sizeof(int));
+    return queue;
+}
+ 
+// Queue is full when size becomes equal to the capacity 
+int isFull(struct Queue* queue)
+{  return (queue->size == queue->capacity);  }
+ 
+// Queue is empty when size is 0
+int isEmpty(struct Queue* queue)
+{  return (queue->size == 0); }
+ 
+// Function to add an item to the queue.  
+// It changes rear and size
+void enqueue(struct Queue* queue, int item)
+{
+    if (isFull(queue))
+        return;
+    queue->rear = (queue->rear + 1)%queue->capacity;
+    queue->pages[queue->rear] = item;
+    queue->size = queue->size + 1;
+    printf("%d enqueued to queue\n", item);
+}
+ 
+// Function to remove an item from queue. 
+// It changes front and size
+int dequeue(struct Queue* queue)
+{
+    if (isEmpty(queue))
+        return INT_MIN;
+    int item = queue->pages[queue->front];
+    queue->front = (queue->front + 1)%queue->capacity;
+    queue->size = queue->size - 1;
+    return item;
 }
